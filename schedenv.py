@@ -15,11 +15,18 @@ class SchedEnv:     # no()
         self.rank_u = heft.rank_u_copy
         self.rank_u_copy = copy.deepcopy(self.rank_u)
         self.pred = heft.pred_list()
+        self.q = len(self.computation_costs[0])  # the number of processors
         self.state = []
+        self.state.append(self.v)
+        for index in range(self.q):
+            self.state.append(0)
+        for index in range(self.q):
+            self.state.append(self.computation_costs[0][index])
+
         self.next_state_ = []             # the number of remaining tasks n, est, wij
         self.scheduler = []              # tasks were scheduling on processors.[{1: 3}, {4: 1}, {3: 2}, ...]
         self.Pi = {}                     # the task information on processors
-        self.q = len(self.computation_costs[0])      # the number of processors
+
         self.reward_ = []
         self.makespan = 0
 
@@ -119,20 +126,14 @@ class SchedEnv:     # no()
             pi = action_
             list_pi = []
             est = 0
-
+            label_makespan = 0
             if job == 1:
                 """scheduling the first job"""
-                self.state.append(self.v)
-                for index in range(self.q):
-                    self.state.append(0)
-                for index in range(self.q):
-                    self.state.append(self.computation_costs[job - 1][index])
                 end = self.computation_costs[0][pi - 1]
                 list_pi.append({'job': job, 'est': est, 'end': end})
                 self.Pi[pi] = list_pi
                 self.scheduler.append({job: pi})
-                self.reward_.append(- (end - est))
-                # print("state =", self.state)
+                # self.reward_.append(- (end - est))
 
                 """get next_state"""
                 self.next_state_.append(self.v - 1)
@@ -144,9 +145,14 @@ class SchedEnv:     # no()
             else:
                 """scheduling the others jobs """
                 self.state = self.next_state_
-                # print("state =", self.state)
+                for a in range(self.q):
+                    if a+1 in self.Pi.keys() and label_makespan < self.Pi[a + 1][-1]['end']:
+                        label_makespan = self.Pi[a + 1][-1]['end']
+                    # print(self.Pi[a + 1][-1]['end'])
+
+                # print(self.Pi)
                 est, end = self.sched_other_jobs(job, pi, list_pi)
-                self.reward_.append(- (end - est))
+                # self.reward_.append(- (end - est))
 
                 """get next_state"""
                 self.next_state_ = []
@@ -157,8 +163,20 @@ class SchedEnv:     # no()
                     for index in range(self.q):
                         self.next_state_.append(self.computation_costs[next_job - 1][index])
 
-            make_span = self.reward_[-1]
-            reward_ = make_span
+            # print("state =", self.state, "pi =", pi)
+            if self.rank_u:
+                if end < label_makespan:
+                    self.reward_.append(0)
+                    # print("max_makespan =", label_makespan)
+                else:
+                    # print("max_makespan =", label_makespan)
+                    d = self.state[pi] + self.state[pi + self.q] - label_makespan
+                    self.reward_.append(- d)
+            else:
+                # print("max_makespan =", label_makespan)
+                d = self.state[pi] + self.state[pi + self.q] - label_makespan
+                self.reward_.append(- d)
+            reward_ = self.reward_[-1]
         """
         print("self.scheduler =", self.scheduler)
         print("self.Pi =", sorted(self.Pi.items(), key=operator.itemgetter(0)))
@@ -168,7 +186,6 @@ class SchedEnv:     # no()
         else:
             done_ = True
             self.makespan = end
-            # print("makespan =", - make_span)
 
         return self.next_state_, reward_, done_
 
@@ -180,39 +197,43 @@ class SchedEnv:     # no()
         self.rank_u = copy.deepcopy(self.rank_u_copy)
         self.rank_u_copy = copy.deepcopy(self.rank_u)
         self.pred = heft.pred_list()
+        self.q = len(self.computation_costs[0])  # the number of processors
         self.state = []
+        self.state.append(self.v)
+        for index in range(self.q):
+            self.state.append(0)
+        for index in range(self.q):
+            self.state.append(self.computation_costs[0][index])
         self.next_state_ = []               # the number of remaining tasks n, est, wij
         self.scheduler = []                 # tasks were scheduling on processors.[{1: 3}, {4: 1}, {3: 2}, ...]
         self.Pi = {}                        # the task information on processors
-        self.q = len(self.computation_costs[0])  # the number of processors
+
         self.reward_ = []
         self.makespan = 0
+        return self.state
 
 
-
+"""
 num_task = heft.v
 env = SchedEnv(num_task)
 num_pi = len(heft.computation_costs[0])
 done = False
-
-for n in range(10):
-    action = random.randrange(1, num_pi + 1)    # random action is select Pj: 1-n
-    next_state, reward, done = env.step(action)
-    print("next_state =", next_state, "reward =", reward, "done =", done)
-    print("--------------------------------------------------------------------------")
-
-print("env.scheduler =", env.scheduler)
-print("env.reward_ =", env.reward_)
-print(env.makespan)
-
-
-
-"""
-# test env.rest()
-if done:
+e = 0
+makespans = []
+while e < 1:
     env.reset(num_task)
     for n in range(10):
         action = random.randrange(1, num_pi + 1)  # random action is select Pj: 1-n
         next_state, reward, done = env.step(action)
         print("next_state =", next_state, "reward =", reward, "done =", done)
+        print("--------------------------------------------------------------------------")
+
+    print("env.scheduler =", env.scheduler)
+    print("env.reward_ =", env.reward_)
+    print("makespan =", env.makespan)
+    print(sum(env.reward_))
+    makespans.append(env.makespan)
+    e += 1
+# print(min(makespans))
+
 """
