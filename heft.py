@@ -1,29 +1,24 @@
 # coding=utf
 """The HEFT(Heterogeneous Earliest Finish Time) Scheduling Algorithm of DAGs"""
 import operator
-import random_graph_generator as rgg
 import copy
 import time
+import random_graph_generator as rgg
+
+# v = 10
+v = len(rgg.new_dag)
+dag = rgg.new_dag
+computation_costs = rgg.computation_costs
 
 start_heft = time.time()
 M = 10000
-# v = 100
-v = len(rgg.new_dag)
-p1 = []
-p2 = []
-p3 = []
-p4 = []
-p5 = []
+Pi = {}
+
 eft = 0             # Recording the make_span
-scheduler = []      # Recording the scheduling procedures'id of different tasks.
+scheduler = []      # Recording the scheduling processors'id of different tasks.
 avg_costs = []      # Computing the average computation costs of every task.
 rank_u = []         # Recording the priorities
-pred = []       # Predecessor node list
-
-dag = rgg.new_dag
-
-computation_costs = rgg.computation_costs
-
+pred = []           # Predecessor node list
 
 """
 dag = {
@@ -38,7 +33,21 @@ dag = {
     9: {10: 13},
     10: {},
 }
+
+computation_costs = [
+    [14, 16, 9],
+    [13, 19, 18],
+    [11, 13, 19],
+    [13, 8, 17],
+    [12, 13, 10],
+    [13, 16, 9],
+    [7, 15, 11],
+    [5, 11, 14],
+    [18, 12, 20],
+    [21, 7, 16],
+]
 """
+q = len(computation_costs[0])
 """
 dag = {
     1: {2: 17, 3: 31, 4: 29, 5: 13, 6: 7},
@@ -73,23 +82,8 @@ dag = {
 
 # task(1-10) P1 P2 P3
 
-"""运行时间"""
-"""computation costs"""
+
 """
-computation_costs = [
-    [14, 16, 9],
-    [13, 19, 18],
-    [11, 13, 19],
-    [13, 8, 17],
-    [12, 13, 10],
-    [13, 16, 9],
-    [7, 15, 11],
-    [5, 11, 14],
-    [18, 12, 20],
-    [21, 7, 16],
-]
-
-
 computation_costs = [
     [22, 21, 36],
     [22, 18, 18],
@@ -213,58 +207,50 @@ pred_list()
 
 def add_pi(pi_, job_, est_, eft_):
     """Join the task to the list and add the task to the schedule list"""
-    if pi_ == 1:
-        p1.append({'job': job_, 'start': est_, 'end': eft_})
-        scheduler.append({job: 1})
-    elif pi_ == 2:
-        p2.append({'job': job_, 'start': est_, 'end': eft_})
-        scheduler.append({job: 2})
-    elif pi_ == 3:
-        p3.append({'job': job_, 'start': est_, 'end': eft_})
-        scheduler.append({job: 3})
-    elif pi_ == 4:
-        p4.append({'job': job_, 'start': est_, 'end': eft_})
-        scheduler.append({job: 4})
-    elif pi_ == 5:
-        p5.append({'job': job_, 'start': est_, 'end': eft_})
-        scheduler.append({job: 5})
+    list_pi = []
+    if pi_ in Pi.keys():
+        list_pi = list(Pi[pi_])
+        list_pi.append({'job': job_, 'est': est_, 'end': eft_})
+        Pi[pi_] = list_pi
+        scheduler.append({job_: pi_})
+    else:
+        list_pi.append({'job': job_, 'est': est_, 'end': eft_})
+        Pi[pi_] = list_pi
+        scheduler.append({job_: pi_})
 
 
-def pred_max_nm(job_pred_):
+def get_aft(job_pred_j):
+    """"""
+    aft = 0
+    pred_pi = 0
+    for k in range(len(rank_u_copy)):  # rank_u_copy
+        if job_pred_j == rank_u_copy[k][0]:
+            pred_pi = scheduler[k][job_pred_j]
+            aft = 0
+            for m in range(len(Pi[pred_pi])):
+                if Pi[pred_pi][m]['job'] == job_pred_j:
+                    aft = Pi[pred_pi][m]['end']
+    return aft, pred_pi
+
+
+def pred_max_nm(pi_, job_pred_, job_):
     """The maximum time spent on a precursor node."""
     max_nm_ = 0
     for j in range(len(job_pred_)):
         # print(job_pred_[j])
         # Finding the completion time of the predecessor.1）Finding which processor the predecessor is on
         #  2）Finding the processor index location 3）Output the value of 'end'
-        pred_pi = 0
-        for k in range(len(rank_u_copy)):  # rank_u_copy
-            if job_pred_[j] == rank_u_copy[k][0]:
-                pred_pi = scheduler[k][job_pred_[j]]
-                aft = 0
-                if pred_pi == 1:
-                    for m in range(len(p1)):
-                        if p1[m]['job'] == job_pred_[j]:
-                            aft = p1[m]['end']
-                elif pred_pi == 2:
-                    for m in range(len(p2)):
-                        if p2[m]['job'] == job_pred_[j]:
-                            aft = p2[m]['end']
-                else:
-                    for m in range(len(p3)):
-                        if p3[m]['job'] == job_pred_[j]:
-                            aft = p3[m]['end']
-        # print(aft)
+        job_pred_j = job_pred_[j]
+        """get aft"""
+        aft, pred_pi = get_aft(job_pred_j)
+
         # computing cmi
-        if pi == pred_pi:
+        if pi_ == pred_pi:
             cmi = 0
         else:
-            cmi = dag[job_pred[j]][job]
-        # print(cmi)
-
+            cmi = dag[job_pred_[j]][job_]
         if max_nm_ < aft + cmi:
             max_nm_ = aft + cmi
-            # print(max_nm)
     return max_nm_
 
 
@@ -274,13 +260,12 @@ while len(rank_u) > 0:
     """Select the first task schedule in the list each time"""
     job = rank_u.pop(0)[0]      # task id
 
-    # if len(rank_u) == 9:  # The first task
     if len(rank_u) == v - 1:    # The first task
         est = 0
         # Find the job's minimum spend processor
         min_cost = computation_costs[job - 1][0]
         pi = 1  # default on p1 2018.04.06 add
-        for i in range(3):
+        for i in range(len(computation_costs[0])):
             if min_cost > computation_costs[job - 1][i]:
                 min_cost = computation_costs[job - 1][i]
                 pi = i+1      # Recorder the processor number
@@ -293,23 +278,21 @@ while len(rank_u) > 0:
         eft = M
         label = 0
         avail_pi = 0
-        for pi in range(1, 4):  # Scheduling on different processors.
+        for pi in range(1, q + 1):  # Scheduling on different processors.
             est = 0
             job_pred = []
+            max_nm = 0
             for i in range(len(pred)):
                 if job == pred[i][0]:  # Find the index position of predecessor i
                     job_pred = pred[i][1]
-                    # print(job_pred)
-                    pred_max_nm(job_pred)
-            # Computing the earliest time that processor can handle of task job.
-            if pi == 1 and len(p1) > 0:
-                avail_pi = p1[-1]['end']
-            elif pi == 2 and len(p2) > 0:
-                avail_pi = p2[-1]['end']
-            elif pi == 3 and len(p3) > 0:
-                avail_pi = p3[-1]['end']
+                    max_nm = pred_max_nm(pi, job_pred, job)
 
-            max_nm = pred_max_nm(job_pred)
+            # Computing the earliest time that processor can handle of task job.
+            avail_pi = 0
+            if pi in Pi.keys():
+                avail_pi = Pi[pi][-1]['end']
+
+            # max_nm = pred_max_nm(pi, job_pred, job)
             if est < max(avail_pi, max_nm):
                 est = max(avail_pi, max_nm)
 
@@ -323,17 +306,17 @@ while len(rank_u) > 0:
         # Join the pi list
         add_pi(label, job, est, eft)
 
+
 make_span = eft
 
 end_heft = time.time()
-running_time_heft = int(round((end_heft - start_heft), 3) * 1000)
-print("time=", running_time_heft)
+# running_time_heft = int(round((end_heft - start_heft), 3) * 1000)
+"""print("time=", running_time_heft)"""
 print("-----------------------HEFT-----------------------")
 # print('scheduler =', scheduler)
-# print('p1 =', p1)
-# print('p2 =', p2)
-# print('p3 =', p3)
+# print(Pi)
 print('make_span =', make_span)
+print("-----------------------HEFT-----------------------")
 
 
 def get_min_comp_costs():
@@ -346,5 +329,3 @@ def get_min_comp_costs():
         if min_comp_costs > sum_cost:
             min_comp_costs = sum_cost
     return min_comp_costs
-
-
