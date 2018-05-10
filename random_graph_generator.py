@@ -26,21 +26,32 @@ def random_avg_w_dag(n_min, n_max):
 avg_w_dag = random_avg_w_dag(5, 20)
 
 
-def get_wij(v, p, beta):
+def get_wij(v, p, beta, n, N):
     """Generate computation costs overhead for tasks on different processors"""
-    filename = 'computation_costs.txt'
-    if os.path.exists(filename):
-        os.remove(filename)  # remove
+    file_path = 'save_dag' + '\\' + 'n=' + str(N) + 'q=' + str(q) + '\\'
+    filename = file_path + '_' + str(n) + '_computation_costs_q=' + str(p) + '.txt'
+    file_dir = os.path.split(filename)[0]
+    if not os.path.isdir(file_dir):
+        os.makedirs(file_dir)
+    # if os.path.exists(filename):
+    #     os.remove(filename)  # remove
     for i in range(v):
         avg_w = random.randint(1, 2 * avg_w_dag)
         temp_list = []
         for j in range(p):
             wij = random.randint(math.ceil(avg_w * (1 - beta / 2)), math.ceil(avg_w * (1 + beta / 2)))
-            temp_list.append(wij)
-        computation_costs.append(temp_list)
-        with open(filename, 'a') as file_object2:
-            info1 = str(temp_list) + "\n"
-            file_object2.write(info1)
+            with open(filename, 'a') as file_object2:
+                if j < p - 1:
+                    info1 = str(wij) + "  "
+                    file_object2.write(info1)
+                else:
+                    info1 = str(wij) + "\n"
+                    file_object2.write(info1)
+        #     temp_list.append(wij)
+        # computation_costs.append(temp_list)
+        # with open(filename, 'a') as file_object2:
+        #     info1 = str(temp_list) + "\n"
+        #     file_object2.write(info1)
 
 
 def get_height_width(v, alpha):
@@ -206,7 +217,7 @@ def multi_to_less(task_num_layer, dag_id, avg_comm_costs):
                     dag[p_id] = temp_dag
 
 
-def random_graph_generator(v, ccr, alpha, out_degree, beta, p):
+def random_graph_generator(v, ccr, alpha, out_degree, beta, p, n, N):
     """requires five parameters to build weighted DAGs
     v: number of tasks in the graph
     ccr: average communication cost to average computation cost
@@ -246,13 +257,13 @@ def random_graph_generator(v, ccr, alpha, out_degree, beta, p):
 
     """If there is one node of the dag's first layer,it's a truly dag."""
     if task_num_layer[0] == 1:
-        print("v =", v, "height = ", height, "width =", width, "CCR =", ccr, "Alpha =", alpha,
-              "out_degree =", out_degree, "beta =", beta, "Number of Processors =", p)
-        print("ordered task_num_layer:", task_num_layer)
-        print("dag_id = ", dag_id)
+        # print("v =", v, "height = ", height, "width =", width, "CCR =", ccr, "Alpha =", alpha,
+        #       "out_degree =", out_degree, "beta =", beta, "Number of Processors =", p)
+        # print("ordered task_num_layer:", task_num_layer)
+        # print("dag_id = ", dag_id)
 
         """Generate computation costs on different processors for every task"""
-        get_wij(v, p, beta)
+        get_wij(v, p, beta, n, N)
 
         """Average communication costs"""
         avg_comm_costs = math.ceil(ccr * avg_w_dag)  # Rounded up
@@ -277,8 +288,7 @@ def random_graph_generator(v, ccr, alpha, out_degree, beta, p):
         dag[v] = {}
     else:
         print("DAG Error! Get a new DAG!")
-        print(v)
-        random_graph_generator(v, ccr, alpha, 5, beta, 3)      # Get a new DAG
+        random_graph_generator(v, ccr, alpha, 5, beta, p, n, N)      # Get a new DAG
 
 
 def random_index(set_):
@@ -288,44 +298,53 @@ def random_index(set_):
     return index_
 
 
-def select_parameter():
+def select_parameter(n, N, Q):
     """Select 5 parameters"""
     v = SET_v[random_index(SET_v)]
     ccr = SET_ccr[random_index(SET_ccr)]
     alpha = SET_alpha[random_index(SET_alpha)]
     # out_degree = SET_out_degree[random_index(SET_out_degree)]
     beta = SET_beta[random_index(SET_beta)]
-    # p = random.randint(2, 5)    # processors
-    random_graph_generator(20, ccr, alpha, 5, beta, 3)
-    """ 
+    # q = random.randint(3, 7)    # processors    3-7
+    # v = 100
+    q = Q
+
+    random_graph_generator(v, ccr, alpha, 5, beta, q, n, N)
+
     # Write to file
-    filename = 'graph_parameter.txt'
-    with open(filename, 'w') as file_object:
-        info = str(v) + "  " + str(ccr) + "  " + str(alpha) + "  " + str(out_degree) + "  " + str(beta) + "\n"
-        file_object.write(info)
-    random_graph_generator(v, ccr, alpha, 5, beta, p)
-    """
+    file_path = 'graph_parameter' + '\\' + 'graph_parameter_n=' + str(N) + 'q=' + str(q)
+    filename = file_path + '.txt'
+    with open(filename, 'a') as file_object_:
+        info_ = str(v) + "  " + str(ccr) + "  " + str(alpha) + "  " + str(beta) + "  " + str(q) + "\n"
+        file_object_.write(info_)
+    return v
 
 
-select_parameter()
-dag1 = sorted(dag.items(), key=operator.itemgetter(0))  # Ascending sort by task number
-print("dag =", dag1)
-# print("computation_costs =", computation_costs)
-
-
-# Store DAG  in files
-filename_ = 'dag.txt'
-if os.path.exists(filename_):
-    os.remove(filename_)  # remove
-for m in range(len(dag1)):
-    task_id = dag1[m][0]
-    for key, value in dag1[m][1].items():
-        succ_id = key
-        succ_weight = value
-        filename_ = 'dag.txt'   # build a new file
-        with open(filename_, 'a') as file_object:
-            info = str(task_id) + " " + str(succ_id) + " " + str(succ_weight) + "\n"
-            file_object.write(info)
+if __name__ == "__main__":
+    n = 1
+    N = 200
+    q = 7
+    while n <= N:
+        v = select_parameter(n, N, q)
+        dag1 = sorted(dag.items(), key=operator.itemgetter(0))  # Ascending sort by task number
+        # Store DAG  in files
+        file_path = 'save_dag' + '\\' + 'n=' + str(N) + 'q=' + str(q) + '\\'
+        filename_ = file_path + "_" + str(n) + '_dag_q=' + str(q) + '.txt'
+        # file_dir = os.path.split(filename_)[0]
+        # if not os.path.isdir(file_dir):
+        #     os.makedirs(file_dir)
+        for m in range(len(dag1)):
+            task_id = dag1[m][0]
+            for key, value in dag1[m][1].items():
+                succ_id = key
+                succ_weight = value
+                with open(filename_, 'a') as file_object:
+                    info = str(task_id) + "  " + str(succ_id) + "  " + str(succ_weight) + "\n"
+                    file_object.write(info)
+        dag = {}
+        n += 1
+        # print("dag =", dag1)
+        # print("computation_costs =", computation_costs)
 
 
 def read_dag():
@@ -352,7 +371,7 @@ def read_dag():
         new_dag[last_task_id] = {}
 
 
-read_dag()
+# read_dag()
 
 
 def read_computation_costs(v):
