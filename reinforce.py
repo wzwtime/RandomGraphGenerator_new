@@ -1,8 +1,12 @@
 # coding=utf-8
+import matplotlib
+matplotlib.use('Agg')
 from schedenv import SchedEnv
+import os
 import numpy as np
 import random
 import heft
+import heft_new
 from keras.models import Sequential
 from keras.layers import Dense
 from keras import backend as K
@@ -11,45 +15,42 @@ import copy
 import pylab
 
 
-EPISODES = 1000
-
-
 class REINFORCE:
 
-    def __init__(self, q):
+    def __init__(self, q, n1, n2, discount_factor, lr):
         """"""
-        # self.load_model = True
+        self.n1 = n1
+        self.n2 = n2
+        self.load_model = True
         """actions which agent can do"""
         self.action_space = [a+1 for a in range(q)]
         # get size of state and action
         self.action_size = len(self.action_space)
-        self.state_size = 7
-        self.discount_factor = 0.99
-        self.learning_rate = 0.001
+        self.state_size = 1 + 2 * q
+        self.discount_factor = discount_factor
+        self.learning_rate = lr
 
         self.model = self.build_model()
         self.optimizer = self.optimizer()
         self.states, self.actions, self.rewards = [], [], []
         self.makespans = []
 
-        """
-        if self.load_model:
-            # self.model.load_weights('./save_model/reinforce_trained.h5')
-            self.model.load_weights('./save_model/REINFORCE.h5')
-        """
+        # if self.load_model:
+        #     self.model.load_weights('./save_model/REINFORCE_trained_v=' + str(V) + "q=" + str(q) + "_"
+        #                             + str(self.n1) + "_" + str(self.n2) + ".h5")
 
     # state is input and probability of each action(policy) is output of network
     def build_model(self):
         model = Sequential()
-        model.add(Dense(24, input_dim=self.state_size, activation='relu'))
-        model.add(Dense(24, activation='relu'))
+        model.add(Dense(self.n1, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(self.n2, activation='relu'))
         model.add(Dense(self.action_size, activation='softmax'))
         model.summary()
         return model
 
     # create error function and training function to update policy network
     def optimizer(self):
-        action = K.placeholder(shape=[None, 3])
+        action = K.placeholder(shape=[None, self.action_size])
         discounted_rewards = K.placeholder(shape=[None, ])
 
         # Calculate cross entropy error function
@@ -90,88 +91,116 @@ class REINFORCE:
 
     # update policy neural network
     def train_model(self):
-        discounted_rewards = np.float32(self.discount_rewards(self.rewards))
+        discounted_rewards = np.float64(self.discount_rewards(self.rewards))
         discounted_rewards -= np.mean(discounted_rewards)
         discounted_rewards /= np.std(discounted_rewards)
-
         self.optimizer([self.states, self.actions, discounted_rewards])
         self.states, self.actions, self.rewards = [], [], []
 
 
-"""
-num_task = heft.v
-env = SchedEnv(num_task)
-agent = REINFORCE(env.q)
+def read_parameter(q, t, v):
+    """q is the number of processor, t is which line"""
+    filepath = 'graph_parameter\\'
+    filename = filepath + 'graph_parameter_v=' + str(v) + 'q=' + str(q) + '.txt'
+    f = open(filename, 'r')
+    line = f.readlines()
 
-"""
+    line_need = line[t - 1]
+    line_list = line_need.split()
+    v = line_list[0]
+    ccr = line_list[1]
+    alpha = line_list[2]
+    beta = line_list[3]
+    q = line_list[4]
+    return v, ccr, alpha, beta, q
+
+
+def cyclic(N, Q, V, N1, N2, discount_factor, lr):
+    """N is the number of DAG, Q is the number of processors"""
+    t = 1
+    while t <= N:
+        heft = heft_new.Heft(Q, t, V)
+        heft_make_span = heft.heft()
+        num_task = heft.v
+        env = SchedEnv(num_task, Q, t)
+        agent = REINFORCE(Q, N1, N2, discount_factor, lr)
+        # print(env.dag, heft_make_span)
+
+        global_step = 0
+        scores, episodes = [], []
+        make_spans = []
+
+        for e in range(EPISODES):
+            done = False
+            score = 0
+            # fresh env
+            state = env.reset(num_task, Q, t)
+            state = np.reshape(state, [1, 1 + 2 * Q])
+
+            while not done:
+                global_step += 1
+                # get action for the current state and go one step in environment
+                action = agent.get_action(state) + 1
+
+                next_state, reward, done = env.step(action)
+                if len(next_state) != 1:
+                    next_state = np.reshape(next_state, [1, 1 + 2 * Q])
+
+                agent.append_sample(state, action, reward)
+                score += reward
+                state = copy.deepcopy(next_state)
+
+                if done:
+                    # update policy neural network for each episode
+
+                    agent.train_model()
+                    scores.append(score)
+                    make_spans.append(env.makespan)
+                    episodes.append(e)
+
+                    score = round(score, 2)
+                    # print("episode:", e, "  score:", score, "  time_step:", global_step)
+                    if e % 10 == 0:
+                        print("episode:", e, "  makespan:", score, "  time_step:", global_step)
+
+            if e % 10 == 0:
+
+                pylab.plot(episodes, scores, 'b')
+
+                pylab.xlabel("Episode")
+                pylab.ylabel("- Makespan")
+                # pylab.plot(episodes, make_spans, 'b')
+                # pylab.axhline(-heft.make_span, linewidth=0.5, color='r')
+                pylab.axhline(-heft_make_span, linewidth=0.5, color='r')
+                """"""
+                n, ccr, alpha, beta, q = read_parameter(Q, t, V)
+
+                info = str(N1) + "*" + str(N2) + " ccr=" + str(ccr) + " alpha=" + str(alpha) + " beta=" + str(beta)
+                pylab.title(info)
+                info1 = "_ccr=" + str(ccr) + " alpha=" + str(alpha) + " beta=" + str(beta)
+                save_path = "./save_graph/v=" + str(V) + "q=" + str(Q) + "/"
+                save_name = save_path + "_" + str(t) + info1 + ".png"
+                file_dir = os.path.split(save_name)[0]
+                if not os.path.isdir(file_dir):
+                    os.makedirs(file_dir)
+                pylab.savefig(save_name)
+                pylab.close()
+                if N >= 50:
+                    agent.model.save_weights("./save_model/REINFORCE_trained_v=" + str(V) + "q=" + str(q) + "_"
+                                             + str(N1) + "_" + str(N2) + ".h5")
+
+        t += 1
+
 
 if __name__ == "__main__":
-    num_task = heft.v
-    env = SchedEnv(num_task)
-    agent = REINFORCE(env.q)
+    EPISODES = 100
+    N = 2
+    Q = 3
+    V = 100
+    N1 = 10
+    N2 = 10
+    discount_factor = 1
+    lr = 0.001
 
-    global_step = 0
-    scores, episodes = [], []
-    make_spans = []
+    cyclic(N, Q, V, N1, N2, discount_factor, lr)
 
-    for e in range(EPISODES):
-        done = False
-        # score = 0
-        # fresh env
-        env.reset(num_task)
-        state = [0, 0, 0, 0, 0, 0, 0]
-        state = np.reshape(state, [1, 7])
-
-        while not done:
-            global_step += 1
-            # get action for the current state and go one step in environment
-            action = agent.get_action(state) + 1
-
-            next_state, reward, done = env.step(action)
-            if len(next_state) != 1:
-                next_state = np.reshape(next_state, [1, 7])
-
-            agent.append_sample(state, action, reward)
-            # score += reward
-            state = copy.deepcopy(next_state)
-
-            if done:
-                # update policy neural network for each episode
-
-                agent.train_model()
-                # scores.append(score)
-                make_spans.append(env.makespan)
-                episodes.append(e)
-
-                # score = round(score, 2)
-                # print("episode:", e, "  score:", score, "  time_step:",
-                #       global_step)
-                if e % 10 == 0:
-                    print("episode:", e, "  makespan:", env.makespan, "  time_step:", global_step)
-
-        if e % 10 == 0:
-            # pylab.plot(episodes, scores, 'b')
-            pylab.xlabel("Episode")
-            pylab.ylabel("Makespan")
-            pylab.plot(episodes, make_spans, 'b')
-            pylab.savefig("./save_graph/reinforce.png")
-            agent.model.save_weights("./save_model/REINFORCE.h5")
-
-
-"""
-num_task = heft.v
-env = SchedEnv(num_task)
-num_pi = len(heft.computation_costs[0])
-done = False
-
-for n in range(10):
-    action = random.randrange(1, num_pi + 1)    # random action is select Pj: 1-n
-    next_state, reward, done = env.step(action)
-    if n > 0:
-        print("next_state =", next_state, "reward =", reward, "done =", done)
-        print("--------------------------------------------------------------------------")
-
-print("env.scheduler =", env.scheduler)
-
-reinforce = REINFORCE(env.q)
-"""

@@ -1,5 +1,6 @@
 # coding=utf-8
-import heft
+# import heft
+import heft_new
 import random
 import copy
 # import operator
@@ -7,15 +8,24 @@ import copy
 
 class SchedEnv:     # no()
     """dag schedule environment"""
-    def __init__(self, v):
+    def __init__(self, v, Q, t):
         """"""
-        self.dag = heft.dag
-        self.computation_costs = heft.computation_costs
+        # self.dag = heft.dag
+        # self.computation_costs = heft.computation_costs
+        self.heft = heft_new.Heft(Q, t, v)
+        self.dag = self.heft.read_dag()
+        self.computation_costs = self.heft.read_computation_costs()
+
+        self.pred = self.heft.pred_list()
+        self.rank_u = self.heft.rank_u_copy
+        # self.heft.heft()
         self.v = v                        # v is the number of nodes
-        self.rank_u = heft.rank_u_copy
+
         self.rank_u_copy = copy.deepcopy(self.rank_u)
-        self.pred = heft.pred_list()
-        self.q = len(self.computation_costs[0])  # the number of processors
+        # self.pred = heft.pred_list()
+
+        # self.q = len(self.computation_costs[0])  # the number of processors
+        self.q = Q
         self.state = []
         self.state.append(self.v)
         for index in range(self.q):
@@ -53,6 +63,7 @@ class SchedEnv:     # no()
 
             job_pred_j = job_pred_[j]
             """get aft"""
+
             aft, pred_pi = self.get_aft(job_pred_j)
 
             # computing cmi
@@ -91,7 +102,7 @@ class SchedEnv:     # no()
             if est < max(avail_pi, max_nm):
                 est = max(avail_pi, max_nm)
 
-            if len(self.next_state_) < 4:
+            if len(self.next_state_) < 1 + self.q:
                 self.next_state_.append(est)
 
             if p_i == pi:
@@ -189,14 +200,21 @@ class SchedEnv:     # no()
 
         return self.next_state_, reward_, done_
 
-    def reset(self, v):
+    def reset(self, v, Q, t):
         """"""
-        self.dag = heft.dag
-        self.computation_costs = heft.computation_costs
+        # self.dag = heft.dag
+        # self.computation_costs = heft.computation_costs
+        self.heft = heft_new.Heft(Q, t, v)
+        self.dag = self.heft.read_dag()
+        self.computation_costs = self.heft.read_computation_costs()
+        self.pred = self.heft.pred_list()
+        # self.heft.heft()
+
         self.v = v  # v is the number of nodes
         self.rank_u = copy.deepcopy(self.rank_u_copy)
         self.rank_u_copy = copy.deepcopy(self.rank_u)
-        self.pred = heft.pred_list()
+        # self.pred = heft.pred_list()
+
         self.q = len(self.computation_costs[0])  # the number of processors
         self.state = []
         self.state.append(self.v)
@@ -213,27 +231,41 @@ class SchedEnv:     # no()
         return self.state
 
 
-"""
-num_task = heft.v
-env = SchedEnv(num_task)
-num_pi = len(heft.computation_costs[0])
-done = False
-e = 0
-makespans = []
-while e < 1:
-    env.reset(num_task)
-    for n in range(10):
-        action = random.randrange(1, num_pi + 1)  # random action is select Pj: 1-n
-        next_state, reward, done = env.step(action)
-        print("next_state =", next_state, "reward =", reward, "done =", done)
-        print("--------------------------------------------------------------------------")
+if __name__ == "__main__":
+    Q = 4
+    n = 1
+    V = 20
+    heft = heft_new.Heft(Q, n, V)
+    heft.heft()
 
-    print("env.scheduler =", env.scheduler)
-    print("env.reward_ =", env.reward_)
-    print("makespan =", env.makespan)
-    print(sum(env.reward_))
-    makespans.append(env.makespan)
-    e += 1
-# print(min(makespans))
+    env = SchedEnv(V, Q, n)
+    print(env.state)
 
-"""
+    print(env.dag)
+    print(env.computation_costs)
+    print(env.pred)
+    print(env.rank_u)
+
+
+    # num_pi = len(heft.computation_costs[0])
+    num_pi = Q
+    done = False
+    e = 0
+    makespans = []
+    while e < 1:
+        env.reset(V, Q, n)
+        for n in range(heft.v):
+            action = random.randrange(1, Q + 1)  # random action is select Pj: 1-n
+            next_state, reward, done = env.step(action)
+            print("next_state =", next_state, "reward =", reward, "done =", done)
+            print("--------------------------------------------------------------------------")
+
+        print("env.scheduler =", env.scheduler)
+        print("env.reward_ =", env.reward_)
+        print("makespan =", env.makespan)
+        print(sum(env.reward_))
+        makespans.append(env.makespan)
+        e += 1
+        # print(min(makespans))
+
+
