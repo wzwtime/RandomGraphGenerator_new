@@ -24,7 +24,12 @@ class Cpop:
         self.set_cp = [1, ]     # A set of nodes with the same priority as the entry node
         self.rank_u_copy = self.heft.rank_u_copy
         self.label_pi = 0
-        self.min_costs = 0
+        self.cp_min_costs = 0
+        self.start_time = 0
+        self.end_time = 0
+        self.running_time = 0
+        self.slr = 0
+        self.speedup = 0
 
     def pred_rank_d(self, j, k, rank_d_copy):
         """Looking for the predecessor's rank_d"""
@@ -110,7 +115,7 @@ class Cpop:
                 min_cost = sum_cost
                 pi = i + 1  # Record minimum spend processor number
         self.label_pi = pi
-        self.min_costs = min_cost
+        self.cp_min_costs = min_cost
         return pi, min_cost
 
     def add_pi(self, pi_, job_, est_, eft_):
@@ -182,13 +187,10 @@ class Cpop:
     def scheduling_critical_task(self, job):
         """Schedule critical path tasks"""
         label_pi = self.label_pi
-        # label_pi = min_cost_pi
         # Calculate the earliest time that the critical processor can handle
         avail_pi = 0
         if label_pi in self.Pi.keys():
             avail_pi = self.Pi[label_pi][-1]['end']
-        # avail_pi = avail_est(label_pi)
-        # print(avail_pi)
 
         # The maximum time spent on the predecessors task node
         max_nm = 0
@@ -312,6 +314,7 @@ class Cpop:
     def cpop(self):
         """Execution algorithm"""
         # Initializes the priority queue, sorted by descending priority
+        self.start_time = time.time()
         self.critical_processor()
         self.priority.sort(key=operator.itemgetter(1), reverse=True)
         eft = 0
@@ -321,11 +324,11 @@ class Cpop:
             if len(self.priority) == len(self.dag):
                 eft = self.scheduling_entry_task()
             # scheduling_unentry_task
-
             else:
                 eft = self.scheduling_unentry_task()
-
-
+        self.end_time = time.time()
+        self.running_time = int(round((self.end_time - self.start_time), 3) * 1000)
+        self.slr = round(eft / self.cp_min_costs, 4)
         return eft
 
 
@@ -333,10 +336,17 @@ if __name__ == "__main__":
     q = 3
     n = 1
     v = 10
-    cpop = Cpop(3, 1, 10)
+    cpop = Cpop(q, n, v)
+    makespan = cpop.cpop()
+    cp_min_costs = cpop.cp_min_costs
+    print("-----------------------CPOP-----------------------")
+    print('makespan =', makespan)
+    print("cp_min_costs =", cp_min_costs)
+    print("Running_time =", cpop.running_time)
+    print("SLR =", cpop.slr)
+    print("-----------------------CPOP-----------------------")
 
-    print(cpop.cpop())
-    print(cpop.min_costs)
+
 
 
 

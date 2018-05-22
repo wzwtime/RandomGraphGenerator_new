@@ -1,6 +1,7 @@
 """The HEFT(Heterogeneous Earliest Finish Time) Scheduling Algorithm of DAGs"""
 import operator
 import copy
+import time
 
 
 class Heft:
@@ -21,6 +22,12 @@ class Heft:
         self.rank_u = []  # Recording the priorities
         self.pred = []  # Predecessor node list
         self.rank_u_copy = []
+        self.min_costs = 0
+        self.start_time = 0
+        self.end_time = 0
+        self.running_time = 0
+        self.speedup = 0
+        self.slr = 0
 
     def read_dag(self):
         """q is the number of processors, n is which graph"""
@@ -54,7 +61,7 @@ class Heft:
                 self.dag[task_id] = succ_dict
             # dag_[task_id + 1] = {}
             self.dag[task_id + 1] = {}
-        self.v = len(self.dag)
+        # self.v = len(self.dag)
         return self.dag
 
     def read_computation_costs(self):
@@ -77,20 +84,11 @@ class Heft:
         self.read_dag()
         self.read_computation_costs()
 
-    def get_v_q(self):
-        # v = len(self.read_dag())
-        v = self.v
-        q = self.Q
-        return v, q
-
     def avg_cost(self):
         """Computing the average computation costs of every task"""
         self.get_dag_costs()
         v = self.v
         computation_costs = self.computation_costs
-        # v = self.get_v_q()[0]
-        # computation_costs = self.dag_select()[1]
-        # computation_costs = self.read_computation_costs()
 
         for t in range(v):
             cost = round(sum(computation_costs[t]), 2)  # Keep two decimal places
@@ -106,9 +104,6 @@ class Heft:
         self.avg_cost()
         dag = self.dag
         v = self.v
-        # dag = self.dag_select(n)[0]
-        # dag = self.read_dag()
-        # v = self.get_v_q()[0]
 
         while v > 0:
             # print(dag[i])
@@ -140,8 +135,6 @@ class Heft:
 
     def pred_list(self):
         """Finding the Predecessor Node"""
-        # dag = self.dag_select(n)[0]
-        # dag = self.read_dag()
         dag = self.dag
         self.execute_rank__u()
 
@@ -184,8 +177,6 @@ class Heft:
 
     def pred_max_nm(self, pi_, job_pred_, job_):
         """The maximum time spent on a precursor node."""
-        # dag = self.dag_select(n)[0]
-        # dag = self.read_dag()
         dag = self.dag
 
         max_nm_ = 0
@@ -208,12 +199,10 @@ class Heft:
 
     def get_min_comp_costs(self):
         """Minimizes the cumulative of the computation costs"""
-        # computation_costs = self.dag_select(n)[1]
-        # computation_costs = self.read_computation_costs()
         computation_costs = self.computation_costs
 
         min_comp_costs = 100000
-        for p in range(len(computation_costs[0])):
+        for p in range(self.Q):
             sum_cost = 0
             for j in range(len(computation_costs)):
                 sum_cost += computation_costs[j][p]
@@ -225,13 +214,9 @@ class Heft:
         """"""
         # Calculate the earliest start time  EST(n_i,p_j ) = max{avail[j], max(n_m∈pred(n_i)){AFT(n_m ) + c_(m,i)}
         # Calculate the earliest finish time  EFT(n_i,p_j)=w_(i,j) + EST(n_i,p_j)
-
+        self.start_time = time.time()
         self.pred_list()
-        # computation_costs = self.dag_select(n)[1]
-        # computation_costs = self.read_computation_costs()
         computation_costs = self.computation_costs
-
-        # v = self.get_v_q()[0]
         v = self.v
 
         eft = 0
@@ -257,7 +242,7 @@ class Heft:
                 """First computing max(n_m∈pred(n_i)){AFT(n_m ) + c_(m,i)}"""
                 eft = self.M
                 label = 0
-                avail_pi = 0
+                # avail_pi = 0
                 for pi in range(1, self.Q + 1):  # Scheduling on different processors.
                     est = 0
                     job_pred = []
@@ -285,20 +270,23 @@ class Heft:
 
                 # Join the pi list
                 self.add_pi(label, job, est, eft)
+        self.end_time = time.time()
+        self.running_time = int(round((self.end_time - self.start_time), 3) * 1000)
+        self.min_costs = self.get_min_comp_costs()
+        self.speedup = round(self.min_costs / eft, 4)
         return eft
 
 
 if __name__ == "__main__":
-    Q = 4
+    q = 3
     n = 1
-    V = 20
-    heft = Heft(Q, n, V)
+    v = 10
+    heft = Heft(q, n, v)
     make_span = heft.heft()
 
     print("-----------------------HEFT-----------------------")
-
     print('make_span =', make_span)
-
+    print("min_costs", heft.min_costs)
+    print("Running_time =", heft.running_time)
+    print("Speedup = ", heft.speedup)
     print("-----------------------HEFT-----------------------")
-
-
